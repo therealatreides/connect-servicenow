@@ -1,0 +1,33 @@
+# Environment files (credentials)
+.env
+.env.test
+*.env
+!.env-example
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node (if added later)
+node_modules/
+npm-debug.log*
+
+# Logs
+*.log
+
+# Test credentials
+tests/.env.test
+
+# Test framework (downloaded by setup.sh)
+tests/bats/
+
+# Claude Code local
+.claude/
