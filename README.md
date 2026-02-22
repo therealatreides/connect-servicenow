@@ -15,7 +15,7 @@ The ServiceNow Connector is a **Claude Code skill** that gives your AI agent nat
 
 Ask questions in natural language and Claude translates them into precise ServiceNow REST API calls. Whether you're triaging incidents at 2 AM, auditing CMDB accuracy, or building change request dashboards, this skill turns Claude into a ServiceNow power user.
 
-**Supports three authentication strategies:** Basic Auth, OAuth ROPC, and OAuth Client Credentials.
+**Supports three authentication strategies:** Basic Auth, OAuth ROPC, and OAuth Client Credentials. This skill serves as the canonical API connection layer shared across the ecosystem of ServiceNow Claude Code skills.
 
 ---
 
@@ -43,6 +43,8 @@ Ask questions in natural language and Claude translates them into precise Servic
 - A ServiceNow instance with REST API access enabled
 - A ServiceNow user account with appropriate table permissions
 - If using OAuth tokens, proper inbound client id/secrets
+
+> **Windows / Git Bash:** The skill runs in Git Bash on Windows. All `.sh`, `.bats`, and `.env` files use LF line endings enforced by `.gitattributes`. The `jq_safe()` wrapper in `sn.sh` automatically strips `\r` from `jq` output to prevent corrupted URLs and tokens on Windows.
 
 ---
 
@@ -123,6 +125,29 @@ SNOW_PROD_AUTH_TYPE=oauth_client_credentials
 SNOW_PROD_CLIENT_ID=your-client-id
 SNOW_PROD_CLIENT_SECRET=your-client-secret
 ```
+
+### Special Characters in Passwords
+
+If your password or client secret contains `$`, `!`, `^`, or other characters that bash interprets specially, use base64 encoding with a `_B64` suffix:
+
+```env
+SNOW_PASSWORD_B64=bVo5b1AtRHh4QyQz
+SNOW_CLIENT_SECRET_B64=c2VjcmV0IXdpdGhzcGVjaWFsY2hhcnM=
+```
+
+Encode: `echo -n 'your-password' | base64`
+Decode: `echo 'encoded-value' | base64 -d`
+
+The skill decodes `_B64` values automatically at runtime.
+
+### Global Configuration Fallback
+
+The skill looks for credentials in this order:
+
+1. `./.env` — Project-level (preferred)
+2. `~/.claude/.servicenow.env` — Global fallback (applies to all projects)
+
+The global fallback is useful when you work across many repositories with the same ServiceNow instance.
 
 > **Tip:** Use a dedicated integration user with least-privilege ACLs rather than an admin account.
 
@@ -254,6 +279,7 @@ ServiceNow uses encoded query syntax for filtering. Here's a quick reference:
 - **Zero hardcoded credentials** — all authentication via environment variables or `.env` file
 - **No instance URLs stored** — `SNOW_INSTANCE_URL` is read from env at runtime
 - **`.env` gitignore enforcement** — the skill verifies `.env` is gitignored before proceeding
+- **OAuth tokens in memory only** — tokens are held in process memory and cleared via `trap` on EXIT; never written to disk
 
 ### Operation Safety
 
@@ -264,6 +290,18 @@ ServiceNow uses encoded query syntax for filtering. Here's a quick reference:
 - **JSON validation** — all create/update payloads are validated before submission
 - **Mutation confirmation** — exact command and data shown to user before executing any create, update, or delete
 
+### Input Validation
+
+All inputs are validated before any API call is made:
+
+| Input | Rule |
+|-------|------|
+| Table names | `^[a-z0-9_]+$` — lowercase letters, digits, underscores only |
+| `sys_id` values | `^[a-f0-9]{32}$` — exactly 32 hex characters |
+| Numeric params (`--limit`, `--offset`) | `^[0-9]+$` — digits only |
+| JSON payloads | Parsed by `jq` before submission; invalid JSON is rejected |
+| Instance URLs | `http://` auto-upgraded to `https://`; bare hostnames get `https://` prepended |
+
 ### Retry Logic
 
 - **Timeout/5xx errors** — retry up to 2 times with 2-second delay
@@ -271,16 +309,52 @@ ServiceNow uses encoded query syntax for filtering. Here's a quick reference:
 - **OAuth 401** — refresh token and retry up to 2 times
 - **Basic Auth 401** — no retry (invalid credentials)
 - **403/404/400** — no retry (client error)
+- **Max retries configurable** — set `SNOW_MAX_RETRIES` to override the default of 3 total attempts
 
 ---
 
 ## Project Structure
 
 ```
-servicenow-connector/
+connect-servicenow/
 ├── README.md
-├── README-Example.md
+├── LICENSE
+├── .gitignore
+├── .gitattributes                      # Forces LF line endings for .sh/.bats/.env
+├── .env-example                        # Credential template
 ├── assets/                             # Support/donation images
+├── tests/
+│   ├── setup.sh                        # Downloads bats-core, bats-support, bats-assert
+│   ├── run_tests.sh                    # Test runner (--unit, --integration, --all, --cleanup)
+│   ├── .env.test.example               # Integration test credential template
+│   ├── helpers/
+│   │   ├── mock_curl.bash              # PATH-based curl mock for unit tests
+│   │   ├── test_helper.bash            # Common setup/teardown helpers
+│   │   └── integration_helper.bash     # PDI connection and profile helpers
+│   ├── fixtures/                       # Mock responses and sample payloads
+│   ├── unit/                           # 210 tests — no network required
+│   │   ├── test_arg_parsing.bats
+│   │   ├── test_dispatcher.bats
+│   │   ├── test_env_config.bats
+│   │   ├── test_error_messages.bats
+│   │   ├── test_oauth_flow.bats
+│   │   ├── test_retry_logic.bats
+│   │   ├── test_safety_guards.bats
+│   │   ├── test_url_construction.bats
+│   │   └── test_validation.bats
+│   └── integration/                    # 53 tests — requires live PDI
+│       ├── test_connection.bats
+│       ├── test_query.bats
+│       ├── test_get.bats
+│       ├── test_schema.bats
+│       ├── test_aggregate.bats
+│       ├── test_health.bats
+│       ├── test_create.bats
+│       ├── test_update.bats
+│       ├── test_delete.bats
+│       ├── test_crud_lifecycle.bats
+│       ├── test_attach.bats
+│       └── test_batch.bats
 └── src/
     └── skills/
         └── connect-servicenow/
@@ -312,6 +386,56 @@ servicenow-connector/
 
 ---
 
+## Testing
+
+The project ships with a [BATS](https://github.com/bats-core/bats-core) (Bash Automated Testing System) test suite: **210 unit tests** that run with no network access, and **53 integration tests** that run against a live ServiceNow PDI.
+
+### Getting Started
+
+```bash
+# 1. Download bats-core and helpers
+bash tests/setup.sh
+
+# 2. Run unit tests (no credentials needed)
+bash tests/run_tests.sh --unit
+
+# 3. (Optional) Run integration tests against a live PDI
+cp tests/.env.test.example tests/.env.test
+# Edit tests/.env.test with your PDI credentials
+bash tests/run_tests.sh --integration
+```
+
+### Unit Tests (210 tests, 9 files)
+
+Run entirely offline using a PATH-based `curl` mock. No ServiceNow credentials required.
+
+| File | Coverage |
+|------|----------|
+| `test_arg_parsing.bats` | All command flags and argument combinations |
+| `test_dispatcher.bats` | Command routing |
+| `test_env_config.bats` | Environment variable loading and validation |
+| `test_error_messages.bats` | Error output format |
+| `test_oauth_flow.bats` | Token acquisition, refresh, and expiry |
+| `test_retry_logic.bats` | 5xx, 429, 401, and 000 retry sequences |
+| `test_safety_guards.bats` | Delete confirmation and batch dry-run enforcement |
+| `test_url_construction.bats` | URL building for all 10 commands |
+| `test_validation.bats` | Table name, sys_id, number, and JSON validation |
+
+### Integration Tests (53 tests, 12 files)
+
+Run against a live ServiceNow PDI. Tests are staged: a connection gate runs first, then read-only tests, mutation tests, and finally attachment/batch tests. Orphaned test records can be cleaned up with `--cleanup`.
+
+```bash
+bash tests/run_tests.sh --all           # Unit + integration
+bash tests/run_tests.sh --integration   # Integration only
+bash tests/run_tests.sh --cleanup       # Remove orphaned test records from PDI
+bash tests/run_tests.sh --file tests/unit/test_validation.bats   # Single file
+```
+
+Integration tests support multiple credential profiles in `tests/.env.test` — one profile per auth type (basic, oauth_ropc, oauth_client_credentials). The runner auto-detects and iterates all configured profiles.
+
+---
+
 ## Built By
 
 **Scott Royalty** — ServiceNow Developer & AI Automation
@@ -331,12 +455,16 @@ If you find this project useful, consider supporting its development:
 <table>
   <tr>
     <td align="center">
-      <strong>CashApp</strong><br/>
-      <img src="assets/cashapp_qr.png" alt="CashApp QR Code" width="200"/>
+      <div>
+        <strong>CashApp</strong><br/>
+        <img src="assets/cashapp_qr.png" alt="CashApp QR Code" width="200"/>
+      </div>
     </td>
     <td align="center">
-      <strong>PayPal</strong><br/>
-      <img src="assets/paypal_qr.png" alt="PayPal QR Code" width="200"/>
+      <div>
+        <strong>PayPal</strong><br/>
+        <img src="assets/paypal_qr.png" alt="PayPal QR Code" width="200"/>
+      </div>
     </td>
   </tr>
 </table>
@@ -355,10 +483,16 @@ Copyright &copy; 2026 Scott Royalty / OnlyFlows
 
 Contributions welcome! Open an issue or PR at [github.com/therealatreides/Claude-Code-ServiceNow-Connector](https://github.com/therealatreides/Claude-Code-ServiceNow-Connector).
 
+Please ensure unit tests pass before opening a PR:
+
+```bash
+bash tests/run_tests.sh --unit
+```
+
 Ideas for contribution:
 
 - Additional ServiceNow API support (CMDB API, Import Sets, Scripted REST)
 - Additional OAuth flows or SSO integrations
 - ServiceNow Flow Designer integration
 - Additional domain patterns (Service Catalog, HR, ITOM)
-- Test suite and CI/CD pipeline
+- CI/CD pipeline
