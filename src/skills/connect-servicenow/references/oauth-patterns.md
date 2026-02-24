@@ -201,11 +201,11 @@ Users who need to configure OAuth in their ServiceNow instance:
 <token_security>
 **Token handling rules**:
 
-1. **In-memory only**: Access tokens and refresh tokens are held in the sn.sh process only — never written to disk, .env files, logs, or any persistent storage
-2. **Process-scoped**: Tokens are valid only for the current sn.sh execution
-3. **No token caching**: Each sn.sh invocation acquires fresh tokens
-4. **Refresh tokens**: Used within the process to avoid token expiry during long operations (batch), but discarded when the process ends
+1. **Cached in .env**: When `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` are provided, access tokens and refresh tokens are written back to the `.env` file after acquisition for reuse across invocations
+2. **Process-scoped fallback**: When env file path is not provided (manual credentials), tokens are held in process memory only and discarded on exit
+3. **Token caching**: Cached tokens are reused across sn.sh invocations until expired. Disable with `SNOW_TOKEN_CACHE=false`
+4. **Refresh tokens**: Used within the process to avoid token expiry during long operations (batch). For ROPC, also cached in .env for cross-invocation refresh
 5. **Client secrets in .env**: Acceptable because .env is user-managed and gitignored — same security model as passwords in .env
 
-**Rationale**: Tokens are short-lived process artifacts. Persisting them provides no benefit (they expire) and creates risk (token leakage). Client credentials in .env are acceptable because the user has explicitly opted in to credential persistence.
+**Rationale**: Tokens are short-lived but worth caching to avoid redundant acquisition (~0.5-1s overhead per call). The .env file already stores more sensitive client secrets, so adding cached tokens does not change the security profile. Disable with `SNOW_TOKEN_CACHE=false` for environments where any disk persistence is unacceptable.
 </token_security>

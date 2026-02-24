@@ -68,6 +68,14 @@ SNOW_{ALIAS}_CLIENT_SECRET=xyz789
 - Uppercase alphanumeric and underscores only (e.g., `DEV`, `TEST`, `PROD_US`)
 - Case-insensitive for matching (stored/displayed as provided)
 - Cannot be empty or use reserved word `SNOW`
+
+**Token cache variables** (auto-managed by sn.sh — do not edit manually):
+```
+SNOW_{ALIAS}_ACCESS_TOKEN=eyJhbGci...
+SNOW_{ALIAS}_REFRESH_TOKEN=xRkPTswu...
+SNOW_{ALIAS}_TOKEN_EXPIRES_AT=1740422400
+```
+These are written automatically after OAuth token acquisition when `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` are provided. They are read on subsequent invocations to avoid redundant token requests. Stale tokens (past `TOKEN_EXPIRES_AT`) are automatically re-acquired. Disable caching with `SNOW_TOKEN_CACHE=false`.
 </variable_naming_schema>
 
 <required_fields_by_auth_type>

@@ -124,6 +124,28 @@ export SNOW_PASSWORD="your_password"
 # export SNOW_CLIENT_SECRET="your_client_secret"
 ```
 
+**For .env-based connections with token caching**, the calling one-liner should also map token variables and provide write-back context:
+```bash
+while IFS='=' read -r key value; do
+  [[ -z "$key" || "$key" =~ ^# ]] && continue
+  key=$(echo "$key" | xargs); value=$(echo "$value" | xargs)
+  case "$key" in
+    SNOW_{ALIAS}_INSTANCE_URL) export SNOW_INSTANCE_URL="$value" ;;
+    SNOW_{ALIAS}_AUTH_TYPE) export SNOW_AUTH_TYPE="$value" ;;
+    SNOW_{ALIAS}_CLIENT_ID) export SNOW_CLIENT_ID="$value" ;;
+    SNOW_{ALIAS}_CLIENT_SECRET) export SNOW_CLIENT_SECRET="$value" ;;
+    SNOW_{ALIAS}_ACCESS_TOKEN) export SNOW_ACCESS_TOKEN="$value" ;;
+    SNOW_{ALIAS}_REFRESH_TOKEN) export SNOW_REFRESH_TOKEN="$value" ;;
+    SNOW_{ALIAS}_TOKEN_EXPIRES_AT) export SNOW_TOKEN_EXPIRES_AT="$value" ;;
+  esac
+done < .env \
+  && export SNOW_ENV_FILE="$(pwd)/.env" \
+  && export SNOW_ENV_PREFIX="{ALIAS}" \
+  && bash scripts/sn.sh health --check version
+```
+
+Replace `{ALIAS}` with the actual instance alias (e.g., `DEV`, `TEST`). The `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` variables enable sn.sh to write cached tokens back to the .env file after acquisition. See `references/env-file-format.md` `<variable_naming_schema>` for token cache variables.
+
 Test the connection:
 ```bash
 bash scripts/sn.sh health --check version

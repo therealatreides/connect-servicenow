@@ -71,9 +71,10 @@ If validation fails, the script exits immediately without making any API call.
 **Credential handling rules** (see also `authentication.md`):
 
 1. **No credential persistence unless user opts in via .env**
-2. **OAuth tokens held in process memory only** — never written to disk
+2. **OAuth tokens cached in .env** alongside credentials for session reuse when `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` are provided. When not provided (manual credentials), tokens are held in process memory only
 3. **Gitignore enforcement** for .env files in git repositories
 4. **No credential logging** — sn.sh never echoes passwords or tokens to stdout/stderr
+5. **Token cache opt-out** — set `SNOW_TOKEN_CACHE=false` to disable token caching (original process-memory-only behavior)
 </credential_safety>
 
 <retry_safety>

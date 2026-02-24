@@ -113,6 +113,7 @@ acquire_token() {
   _TOKEN_EXPIRES_AT=$(( $(date +%s) + expires_in - 60 ))
 
   info "Token acquired (expires in ${expires_in}s)"
+  _save_token_to_env
 }
 
 refresh_token() {
@@ -136,6 +137,7 @@ refresh_token() {
       expires_in=$(echo "$body" | jq_safe -r '.expires_in // 1800')
       _TOKEN_EXPIRES_AT=$(( $(date +%s) + expires_in - 60 ))
       info "Token refreshed"
+      _save_token_to_env
       return 0
     fi
     info "Refresh failed (HTTP $http_code) — re-acquiring token..."
@@ -158,6 +160,32 @@ ensure_token() {
   fi
 }
 
+# ── Token Cache (write-back to .env) ─────────────────────────────────
+_save_token_to_env() {
+  # Write token back to .env file if env file path and prefix are provided
+  [[ "${SNOW_TOKEN_CACHE:-}" == "false" ]] && return
+  [[ -z "${SNOW_ENV_FILE:-}" || -z "${SNOW_ENV_PREFIX:-}" ]] && return
+  [[ ! -w "$SNOW_ENV_FILE" ]] && return
+
+  local prefix="$SNOW_ENV_PREFIX"
+  local key_token="SNOW_${prefix}_ACCESS_TOKEN"
+  local key_refresh="SNOW_${prefix}_REFRESH_TOKEN"
+  local key_expires="SNOW_${prefix}_TOKEN_EXPIRES_AT"
+
+  # Remove existing token lines (if any), then append fresh values
+  sed -i.bak \
+    -e "/^${key_token}=/d" \
+    -e "/^${key_refresh}=/d" \
+    -e "/^${key_expires}=/d" \
+    "$SNOW_ENV_FILE" && rm -f "${SNOW_ENV_FILE}.bak"
+
+  {
+    echo "${key_token}=${_ACCESS_TOKEN}"
+    [[ -n "$_REFRESH_TOKEN" ]] && echo "${key_refresh}=${_REFRESH_TOKEN}"
+    echo "${key_expires}=${_TOKEN_EXPIRES_AT}"
+  } >> "$SNOW_ENV_FILE"
+}
+
 # Build auth arguments for curl into _AUTH_ARGS array
 declare -a _AUTH_ARGS=()
 build_auth_args() {
@@ -169,9 +197,19 @@ build_auth_args() {
   fi
 }
 
-# Acquire initial token for OAuth auth types
+# Acquire initial token for OAuth auth types (check cache first)
 if [[ "$SNOW_AUTH_TYPE" != "basic" ]]; then
-  acquire_token
+  if [[ "${SNOW_TOKEN_CACHE:-}" != "false" \
+     && -n "${SNOW_ACCESS_TOKEN:-}" \
+     && -n "${SNOW_TOKEN_EXPIRES_AT:-}" \
+     && "$(date +%s)" -lt "${SNOW_TOKEN_EXPIRES_AT}" ]]; then
+    _ACCESS_TOKEN="$SNOW_ACCESS_TOKEN"
+    _REFRESH_TOKEN="${SNOW_REFRESH_TOKEN:-}"
+    _TOKEN_EXPIRES_AT="$SNOW_TOKEN_EXPIRES_AT"
+    info "Using cached token (expires in $(( _TOKEN_EXPIRES_AT - $(date +%s) ))s)"
+  else
+    acquire_token
+  fi
 fi
 
 # ── Core API Function ──────────────────────────────────────────────────
