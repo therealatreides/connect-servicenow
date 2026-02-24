@@ -46,7 +46,7 @@ Full retry behavior and table: `references/safety-rules.md` `<retry_safety>`.
 1. `.env` files containing credentials MUST be listed in `.gitignore`
 2. NEVER log or echo `SNOW_PASSWORD`, `SNOW_CLIENT_SECRET`, or OAuth tokens
 3. Instance URLs MUST use HTTPS — reject HTTP URLs
-4. OAuth tokens are held in process memory only — never written to disk, cleared on script exit
+4. OAuth tokens cached in `.env` for session reuse (same file as credentials). Disable with `SNOW_TOKEN_CACHE=false`
 5. Manually entered credentials are session-scoped — not persisted unless user opts in via `.env`
 6. TLS certificate verification is enforced via curl's default certificate bundle — never use `--insecure` or `-k`
 

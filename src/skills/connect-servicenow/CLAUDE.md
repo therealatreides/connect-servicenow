@@ -85,7 +85,7 @@ Defenses built into `sn.sh`:
 2. **Input validation** — Table names: `^[a-z0-9_]+$`. Sys_ids: `^[a-f0-9]{32}$`. Numbers: `^[0-9]+$`. All query parameters URI-encoded via `jq @uri`.
 3. **API-returned data validation** — Parent table names from schema walk responses are validated against the same regex before use in URLs.
 4. **Error message sanitization** — Invalid JSON payloads are not echoed in error messages to prevent leaking sensitive field values (e.g., passwords being set on user records).
-5. **Token lifecycle** — OAuth tokens are process-scoped, cleared via `trap` on EXIT. `ensure_token` is called inside the batch processing loop to prevent mid-batch token expiry.
+5. **Token lifecycle** — OAuth tokens are cached in `.env` for cross-invocation reuse when `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` are provided (disable with `SNOW_TOKEN_CACHE=false`). When caching is disabled or env file is not provided, tokens are process-scoped and cleared on EXIT. `ensure_token` is called inside the batch processing loop to prevent mid-batch token expiry.
 6. **Download path validation** — Attachment downloads verify the output directory exists before making the API call.
 7. **No shell injection** — `set -euo pipefail` enforced. No `eval`, `exec`, or backtick expansion with user input. All inputs treated as data, never code.
 

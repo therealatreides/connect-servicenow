@@ -126,6 +126,18 @@ SNOW_PROD_CLIENT_ID=your-client-id
 SNOW_PROD_CLIENT_SECRET=your-client-secret
 ```
 
+### Token Caching
+
+When using OAuth with `.env`-based credentials and named instances, `sn.sh` caches access tokens and refresh tokens back to the `.env` file after acquisition. Cached tokens are reused on subsequent invocations until expired, avoiding ~0.5-1s token acquisition overhead per call.
+
+To disable token caching:
+
+```env
+SNOW_TOKEN_CACHE=false
+```
+
+When disabled (or when credentials are provided manually without `.env`), tokens are held in process memory only and discarded on exit.
+
 ### Special Characters in Passwords
 
 If your password or client secret contains `$`, `!`, `^`, or other characters that bash interprets specially, use base64 encoding with a `_B64` suffix:
@@ -279,7 +291,7 @@ ServiceNow uses encoded query syntax for filtering. Here's a quick reference:
 - **Zero hardcoded credentials** — all authentication via environment variables or `.env` file
 - **No instance URLs stored** — `SNOW_INSTANCE_URL` is read from env at runtime
 - **`.env` gitignore enforcement** — the skill verifies `.env` is gitignored before proceeding
-- **OAuth tokens in memory only** — tokens are held in process memory and cleared via `trap` on EXIT; never written to disk
+- **OAuth token caching** — when using `.env`-based credentials with named instances, tokens are cached in the `.env` file alongside credentials for cross-invocation reuse. Disable with `SNOW_TOKEN_CACHE=false`. When credentials are provided manually (no `.env`), tokens remain in process memory only
 
 ### Operation Safety
 
