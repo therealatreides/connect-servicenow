@@ -22,6 +22,12 @@ SNOW_INSTANCE_URL="${SNOW_INSTANCE_URL%/}"
 SNOW_INSTANCE_URL="${SNOW_INSTANCE_URL/#http:\/\//https:\/\/}"
 [[ "$SNOW_INSTANCE_URL" != https://* ]] && SNOW_INSTANCE_URL="https://$SNOW_INSTANCE_URL"
 
+# Decode _B64 credential values (base64-encoded to avoid shell metacharacter issues)
+[[ -n "${SNOW_PASSWORD_B64:-}" && -z "${SNOW_PASSWORD:-}" ]] && \
+  SNOW_PASSWORD=$(echo "$SNOW_PASSWORD_B64" | base64 -d 2>/dev/null) && export SNOW_PASSWORD
+[[ -n "${SNOW_CLIENT_SECRET_B64:-}" && -z "${SNOW_CLIENT_SECRET:-}" ]] && \
+  SNOW_CLIENT_SECRET=$(echo "$SNOW_CLIENT_SECRET_B64" | base64 -d 2>/dev/null) && export SNOW_CLIENT_SECRET
+
 # Validate auth type and required fields
 case "$SNOW_AUTH_TYPE" in
   basic)
@@ -312,6 +318,8 @@ sn_curl_file() {
 
 # Non-fatal curl wrapper for batch operations
 # Returns 0 for 2xx, 1 for errors. Sets _SN_HTTP_CODE with the response status.
+# Precondition: caller MUST call ensure_token immediately before invoking this function.
+# This wrapper does not retry on 429/5xx — rate limiting causes per-record failure.
 _SN_HTTP_CODE=""
 sn_curl_try() {
   local method="$1" url="$2"

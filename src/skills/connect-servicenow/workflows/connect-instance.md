@@ -5,19 +5,14 @@ Establish an authenticated connection to a ServiceNow instance. This workflow mu
 <steps>
 
 <step_detect_env>
-Search for a `.env` file in this order:
-1. `./.env` (current working directory)
-2. `~/.claude/.servicenow.env` (global fallback)
+Search for `./.env` in the current working directory (project directory only — no global fallback):
 
 ```bash
-# Check project-level
+# Check project-level .env
 ls -la .env 2>/dev/null
-
-# Check global fallback
-ls -la ~/.claude/.servicenow.env 2>/dev/null
 ```
 
-If neither exists → skip to Step 4 (manual prompt).
+If not found → skip to Step 4 (manual prompt).
 If found → check file permissions before proceeding:
 
 ```bash
@@ -124,27 +119,15 @@ export SNOW_PASSWORD="your_password"
 # export SNOW_CLIENT_SECRET="your_client_secret"
 ```
 
-**For .env-based connections with token caching**, the calling one-liner should also map token variables and provide write-back context:
-```bash
-while IFS='=' read -r key value; do
-  [[ -z "$key" || "$key" =~ ^# ]] && continue
-  key=$(echo "$key" | xargs); value=$(echo "$value" | xargs)
-  case "$key" in
-    SNOW_{ALIAS}_INSTANCE_URL) export SNOW_INSTANCE_URL="$value" ;;
-    SNOW_{ALIAS}_AUTH_TYPE) export SNOW_AUTH_TYPE="$value" ;;
-    SNOW_{ALIAS}_CLIENT_ID) export SNOW_CLIENT_ID="$value" ;;
-    SNOW_{ALIAS}_CLIENT_SECRET) export SNOW_CLIENT_SECRET="$value" ;;
-    SNOW_{ALIAS}_ACCESS_TOKEN) export SNOW_ACCESS_TOKEN="$value" ;;
-    SNOW_{ALIAS}_REFRESH_TOKEN) export SNOW_REFRESH_TOKEN="$value" ;;
-    SNOW_{ALIAS}_TOKEN_EXPIRES_AT) export SNOW_TOKEN_EXPIRES_AT="$value" ;;
-  esac
-done < .env \
-  && export SNOW_ENV_FILE="$(pwd)/.env" \
-  && export SNOW_ENV_PREFIX="{ALIAS}" \
-  && bash scripts/sn.sh health --check version
-```
+**CRITICAL: Never use `source .env` or `set -a; source .env; set +a` to load credentials.** See `references/env-file-format.md` `<never_source>` for full rationale and the safe line-by-line parsing pattern.
 
-Replace `{ALIAS}` with the actual instance alias (e.g., `DEV`, `TEST`). The `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` variables enable sn.sh to write cached tokens back to the .env file after acquisition. See `references/env-file-format.md` `<variable_naming_schema>` for token cache variables.
+**For .env-based connections with token caching**, use the safe parsing pattern from `references/env-file-format.md` `<parsing_rules>` to map `SNOW_{ALIAS}_*` variables to `SNOW_*`, then set `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` to enable token cache write-back:
+```bash
+export SNOW_ENV_FILE="$(pwd)/.env" SNOW_ENV_PREFIX="{ALIAS}"
+```
+Replace `{ALIAS}` with the actual instance alias (e.g., `DEV`, `TEST`). See `references/env-file-format.md` `<variable_naming_schema>` for token cache variables.
+
+**Base64-encoded credentials** (`_B64` suffix) are decoded automatically by `sn.sh` at startup — no workflow-level decoding needed. If `SNOW_PASSWORD_B64` is set and `SNOW_PASSWORD` is empty, the base64 value is decoded and used. Same for `SNOW_CLIENT_SECRET_B64`.
 
 Test the connection:
 ```bash
