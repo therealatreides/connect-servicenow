@@ -291,8 +291,13 @@ run_cleanup() {
     exit 1
   fi
 
-  # shellcheck source=/dev/null
-  set -a; source "${SCRIPT_DIR}/.env.test"; set +a
+  # Parse env file line-by-line (never use 'source' — special chars in secrets break it)
+  while IFS= read -r _line || [[ -n "$_line" ]]; do
+    [[ -z "$_line" || "$_line" =~ ^[[:space:]]*# ]] && continue
+    _name="${_line%%=*}"; _value="${_line#*=}"; _name=$(echo "$_name" | xargs)
+    [[ "$_name" == SNOW_* ]] && export "$_name=$_value"
+  done < "${SCRIPT_DIR}/.env.test"
+  unset _line _name _value
 
   echo "Searching for orphaned BATS_TEST_RECORD entries on incident table..."
   local result

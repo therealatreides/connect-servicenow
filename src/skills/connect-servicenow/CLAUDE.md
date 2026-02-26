@@ -111,7 +111,7 @@ Defenses built into `sn.sh`:
 
 <common_workflows>
 
-### Git Workflow
+<git_workflow>
 - Follow GitHub Flow (feature branches from main)
 - Use Conventional Commits format:
   - `feat:` new feature
@@ -120,13 +120,15 @@ Defenses built into `sn.sh`:
   - `refactor:` code refactoring
   - `test:` adding tests
   - `chore:` maintenance
+</git_workflow>
 
-### Testing
+<testing>
 - Framework: **BATS** (Bash Automated Testing System) — setup via `bash tests/setup.sh`
 - Run unit tests (no network): `bash tests/run_tests.sh --unit`
 - Run integration tests (requires PDI credentials in `tests/.env.test`): `bash tests/run_tests.sh --integration`
 - Run all: `bash tests/run_tests.sh --all`
 - Always run unit tests before committing
+</testing>
 
 </common_workflows>
 

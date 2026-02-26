@@ -152,16 +152,41 @@ Decode: `echo 'encoded-value' | base64 -d`
 
 The skill decodes `_B64` values automatically at runtime.
 
-### Global Configuration Fallback
+### Credential Location
 
-The skill looks for credentials in this order:
-
-1. `./.env` — Project-level (preferred)
-2. `~/.claude/.servicenow.env` — Global fallback (applies to all projects)
-
-The global fallback is useful when you work across many repositories with the same ServiceNow instance.
+The skill reads credentials from `./.env` in the project directory only. Each project maintains its own `.env` file — there is no global fallback. This prevents credentials from one project leaking into another.
 
 > **Tip:** Use a dedicated integration user with least-privilege ACLs rather than an admin account.
+
+### Consuming Skills Pattern
+
+When other Claude Code skills call `sn.sh`, they must export `SNOW_*` environment variables before each invocation (shell state doesn't persist between Bash tool calls). Here's the canonical pattern for named instances:
+
+```bash
+ENV_FILE="/path/to/project/.env"
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+  name="${line%%=*}"; value="${line#*=}"; name=$(echo "$name" | xargs)
+  case "$name" in
+    SNOW_DEV_INSTANCE_URL) export SNOW_INSTANCE_URL="$value" ;;
+    SNOW_DEV_AUTH_TYPE) export SNOW_AUTH_TYPE="$value" ;;
+    SNOW_DEV_CLIENT_ID) export SNOW_CLIENT_ID="$value" ;;
+    SNOW_DEV_CLIENT_SECRET) export SNOW_CLIENT_SECRET="$value" ;;
+    SNOW_DEV_ACCESS_TOKEN) export SNOW_ACCESS_TOKEN="$value" ;;
+    SNOW_DEV_REFRESH_TOKEN) export SNOW_REFRESH_TOKEN="$value" ;;
+    SNOW_DEV_TOKEN_EXPIRES_AT) export SNOW_TOKEN_EXPIRES_AT="$value" ;;
+  esac
+done < "$ENV_FILE"
+export SNOW_ENV_FILE="$ENV_FILE" SNOW_ENV_PREFIX="DEV"
+
+bash ~/.claude/skills/connect-servicenow/scripts/sn.sh query incident --query "active=true" --limit 5
+```
+
+**Key points:**
+- Replace `DEV` with your instance alias (`TEST`, `PROD`, etc.)
+- `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` enable token caching across invocations
+- **Never use `source .env`** — secrets commonly contain characters that break bash
+- The `.env` file lives in the project directory, not under `~/.claude/skills/`
 
 ---
 

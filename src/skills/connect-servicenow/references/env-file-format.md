@@ -3,11 +3,12 @@ Environment file format for persisting ServiceNow instance credentials. Opt-in o
 </overview>
 
 <file_locations>
-**Locations** (checked in order):
-1. `./.env` — Project-level (preferred)
-2. `~/.claude/.servicenow.env` — Global fallback
+**Location**: `./.env` (project directory only)
 
-If neither file exists, skip `.env` detection and fall back to manual credential prompt.
+The `.env` file MUST live in the project's working directory. There is no global fallback.
+Each project maintains its own credentials to prevent cross-project credential bleed.
+
+If `./.env` does not exist, skip `.env` detection and fall back to manual credential prompt.
 </file_locations>
 
 <gitignore_requirement>
@@ -42,6 +43,27 @@ The `.env` file contains plaintext credentials. When inside a git repository, it
 
 **Summary**: The `.gitignore` hard block applies only when a git repository exists. When no git repository is detected at any parent level, the `.env` file is read without the `.gitignore` check.
 </gitignore_requirement>
+
+<never_source>
+**CRITICAL: Never use `source .env` or `set -a; source .env; set +a` to load credentials.**
+
+OAuth client secrets and passwords frequently contain shell metacharacters — parentheses `()`, angle brackets `<>`, semicolons `;`, exclamation marks `!`, dollar signs `$`, backticks, and pipes `|` — that cause bash syntax errors when sourced.
+
+**Always use line-by-line parameter expansion parsing**:
+```bash
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+  name="${line%%=*}"; value="${line#*=}"; name=$(echo "$name" | xargs)
+  [[ "$name" == SNOW_* ]] && export "$name=$value"
+done < .env
+```
+
+This pattern:
+- Handles special characters in values safely (no bash expansion)
+- Splits on first `=` only (preserves `=` in base64 values)
+- Skips blank lines and comments
+- Only exports `SNOW_*` variables
+</never_source>
 
 <variable_naming_schema>
 **Default instance** (unprefixed):
@@ -97,12 +119,12 @@ These are written automatically after OAuth token acquisition when `SNOW_ENV_FIL
 <parsing_rules>
 **Line format**: `KEY=VALUE` (no quotes needed, leading/trailing whitespace trimmed)
 
-**Special characters in passwords**: Passwords containing `$`, `!`, `` ` ``, or `=` can break when the `.env` file is sourced by bash. For credentials with special characters, use base64 encoding with a `_B64` suffix:
+**Special characters in passwords**: Passwords and OAuth client secrets containing shell metacharacters — `$`, `!`, `` ` ``, `(`, `)`, `<`, `>`, `;`, `|`, `*`, `{`, `}` — WILL break if the `.env` file is sourced by bash. Always use the line-by-line parsing pattern from `<never_source>` above. As an additional safeguard, credentials with special characters can use base64 encoding with a `_B64` suffix:
 ```
 # Instead of:  SNOW_PASSWORD=mZ9oP-DxxC$3   ($ expands in bash)
 # Use:         SNOW_PASSWORD_B64=bVo5b1AtRHh4QyQz
 ```
-The workflow layer decodes `_B64` values before exporting `SNOW_*` env vars to `sn.sh`. Encode with: `echo -n 'your-password' | base64`. Decode with: `echo 'encoded-value' | base64 -d`.
+`sn.sh` automatically decodes `_B64` values at startup — if `SNOW_PASSWORD_B64` is set and `SNOW_PASSWORD` is empty, the base64 value is decoded and used. Same for `SNOW_CLIENT_SECRET_B64`. Encode with: `echo -n 'your-password' | base64`. Decode with: `echo 'encoded-value' | base64 -d`.
 
 **Parsing behavior**:
 1. Skip blank lines and lines starting with `#`

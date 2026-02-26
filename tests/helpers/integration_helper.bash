@@ -27,11 +27,14 @@ load_test_env() {
     skip "No tests/.env.test file found — integration tests require PDI credentials"
   fi
 
-  # Source the env file, exporting all variables
-  set -a
-  # shellcheck source=/dev/null
-  source "$env_file"
-  set +a
+  # Parse the env file line-by-line (never use 'source' — special chars in secrets break it)
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    local name="${line%%=*}"
+    local value="${line#*=}"
+    name=$(echo "$name" | xargs)
+    [[ "$name" == SNOW_* ]] && export "$name=$value"
+  done < "$env_file"
 
   # If a profile is active, map prefixed vars to SNOW_* vars
   if [[ -n "${SNOW_PROFILE:-}" ]]; then

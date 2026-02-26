@@ -193,13 +193,13 @@ curl -s -H "Authorization: Bearer {access_token}" \
 **Credential handling rules**:
 
 1. **No credential persistence unless user opts in via .env**: Credentials entered manually are used for immediate API calls only and are not stored anywhere
-2. **.env is user-managed**: The skill reads .env files but never creates or modifies them. Users are responsible for securing their .env files.
+2. **.env is user-managed**: The skill reads .env files and, when token caching is enabled, writes cached tokens back to the same file. Users are responsible for securing their .env files.
 3. **Gitignore enforcement**: The `.env` file must never be committed to any repository. When inside a git repository, the skill refuses to read `.env` unless it is listed in `.gitignore` — this is a hard block with no override. **Exception**: If the working directory is not inside any git repository (verified via `git rev-parse --show-toplevel`), the `.gitignore` requirement is waived since there is no risk of committing credentials
-4. **Tokens never persisted**: OAuth access_tokens and refresh_tokens are held in script process memory only — never written to disk, .env files, logs, or any persistent storage
-5. **Session-scoped**: All credentials and tokens are valid only for the current sn.sh invocation
-6. **No token caching**: Each sn.sh invocation acquires fresh tokens
+4. **Token caching (opt-in)**: When `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` are provided, OAuth access tokens and refresh tokens are cached in the `.env` file alongside credentials for cross-invocation reuse. Cached tokens are reused until expired, then automatically re-acquired. Disable with `SNOW_TOKEN_CACHE=false`
+5. **Process-scoped fallback**: When env file path is not provided (manual credentials) or caching is disabled, tokens are held in process memory only and discarded on exit
+6. **No credential logging**: sn.sh never echoes passwords, client secrets, or tokens to stdout/stderr
 
-**Rationale**: Relaxing "never persist" to "opt-in via .env" balances security with developer ergonomics. Users who work with the same instances repeatedly can opt in to credential storage, while the default behavior remains session-only prompting.
+**Rationale**: Tokens are short-lived but worth caching to avoid redundant acquisition (~0.5-1s overhead per call). The .env file already stores more sensitive client secrets, so adding cached tokens does not change the security profile. Disable with `SNOW_TOKEN_CACHE=false` for environments where any disk persistence beyond credentials is unacceptable.
 </security_notes>
 
 <developer_reference>

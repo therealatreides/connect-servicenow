@@ -153,6 +153,8 @@ Before API call:
 | 429 | Too Many Requests | Rate limited. Wait 5 seconds, retry up to 2 times. |
 | 5xx | Server Error | ServiceNow issue. Apply retry policy (up to 2 retries with 2-second delay). |
 
+**Note**: The retry policy above applies to `sn_curl` (single-record operations). During batch operations, `sn_curl_try` does not retry individual records — 429 or 5xx responses cause per-record failures counted in the batch summary. Reduce `--limit` or split batches if encountering rate limiting.
+
 **Error response format**:
 ```json
 {

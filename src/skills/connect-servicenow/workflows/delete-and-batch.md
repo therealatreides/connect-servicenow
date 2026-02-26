@@ -89,6 +89,8 @@ Ensure a ServiceNow connection is established. If `SNOW_*` env vars are not set,
 - `--fields` is mandatory for update actions
 - `--limit` has a safety cap at 10,000 records
 - JSON payloads are validated before execution
+
+**Rate limiting note**: Batch operations do not retry individual records on 429 (rate limit) or 5xx errors — failed records are counted in the `failed` total. If encountering high failure rates during large batch operations, reduce `--limit` or split the operation into smaller batches.
 </step_batch>
 
 </steps>
