@@ -5,22 +5,36 @@ Establish an authenticated connection to a ServiceNow instance. This workflow mu
 <steps>
 
 <step_detect_env>
-Search for `./.env` in the current working directory (project directory only — no global fallback):
+Search for `.env` in the following locations, in order:
+
+1. **Current working directory**: `./.env`
+2. **Git repository root**: `$(git rev-parse --show-toplevel 2>/dev/null)/.env` (only if different from CWD)
 
 ```bash
-# Check project-level .env
-ls -la .env 2>/dev/null
+# 1. Check current working directory
+_ENV_PATH=""
+if [[ -f "./.env" ]]; then
+  _ENV_PATH="$(pwd)/.env"
+else
+  # 2. Check git repository root (if in a git repo)
+  _git_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  if [[ -n "$_git_root" && "$_git_root" != "$(pwd)" && -f "$_git_root/.env" ]]; then
+    _ENV_PATH="$_git_root/.env"
+  fi
+fi
 ```
 
-If not found → skip to Step 4 (manual prompt).
-If found → check file permissions before proceeding:
+If not found in either location → skip to Step 4 (manual prompt).
+If found → display which path was detected: `"Found .env at: $_ENV_PATH"`
+
+Then check file permissions before proceeding:
 
 ```bash
 # Verify .env is not world-readable (Unix/macOS/WSL only)
-perms=$(stat -c %a .env 2>/dev/null || stat -f %Lp .env 2>/dev/null)
+perms=$(stat -c %a "$_ENV_PATH" 2>/dev/null || stat -f %Lp "$_ENV_PATH" 2>/dev/null)
 if [[ -n "$perms" && "$perms" != "600" && "$perms" != "400" ]]; then
   echo "WARNING: .env has permissions $perms — should be 600 (owner read/write only)"
-  echo "Fix with: chmod 600 .env"
+  echo "Fix with: chmod 600 $_ENV_PATH"
 fi
 ```
 
@@ -123,7 +137,7 @@ export SNOW_PASSWORD="your_password"
 
 **For .env-based connections with token caching**, use the safe parsing pattern from `references/env-file-format.md` `<parsing_rules>` to map `SNOW_{ALIAS}_*` variables to `SNOW_*`, then set `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` to enable token cache write-back:
 ```bash
-export SNOW_ENV_FILE="$(pwd)/.env" SNOW_ENV_PREFIX="{ALIAS}"
+export SNOW_ENV_FILE="$_ENV_PATH" SNOW_ENV_PREFIX="{ALIAS}"
 ```
 Replace `{ALIAS}` with the actual instance alias (e.g., `DEV`, `TEST`). See `references/env-file-format.md` `<variable_naming_schema>` for token cache variables.
 
