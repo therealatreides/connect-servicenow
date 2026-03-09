@@ -154,7 +154,12 @@ The skill decodes `_B64` values automatically at runtime.
 
 ### Credential Location
 
-The skill reads credentials from `./.env` in the project directory only. Each project maintains its own `.env` file — there is no global fallback. This prevents credentials from one project leaking into another.
+The skill searches for `.env` in two locations (first match wins):
+
+1. `./.env` — current working directory
+2. Git repository root `.env` — via `git rev-parse --show-toplevel` (if in a repo and different from CWD)
+
+Each project maintains its own `.env` file — there is no global fallback (`~/.env` or system-wide). This prevents credentials from one project leaking into another.
 
 > **Tip:** Use a dedicated integration user with least-privilege ACLs rather than an admin account.
 
@@ -186,7 +191,7 @@ bash ~/.claude/skills/connect-servicenow/scripts/sn.sh query incident --query "a
 - Replace `DEV` with your instance alias (`TEST`, `PROD`, etc.)
 - `SNOW_ENV_FILE` and `SNOW_ENV_PREFIX` enable token caching across invocations
 - **Never use `source .env`** — secrets commonly contain characters that break bash
-- The `.env` file lives in the project directory, not under `~/.claude/skills/`
+- The `.env` file lives in the project directory (CWD or git root), not under `~/.claude/skills/`
 
 ---
 

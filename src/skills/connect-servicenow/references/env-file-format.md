@@ -3,12 +3,14 @@ Environment file format for persisting ServiceNow instance credentials. Opt-in o
 </overview>
 
 <file_locations>
-**Location**: `./.env` (project directory only)
+**Search order** (checked in sequence, first match wins):
 
-The `.env` file MUST live in the project's working directory. There is no global fallback.
-Each project maintains its own credentials to prevent cross-project credential bleed.
+1. `./.env` — current working directory
+2. `$(git rev-parse --show-toplevel)/.env` — git repository root (if in a repo and different from CWD)
 
-If `./.env` does not exist, skip `.env` detection and fall back to manual credential prompt.
+There is no global fallback (`~/.env` or system-wide). Each project maintains its own credentials to prevent cross-project credential bleed.
+
+If `.env` is not found in either location, skip `.env` detection and fall back to manual credential prompt.
 </file_locations>
 
 <gitignore_requirement>
